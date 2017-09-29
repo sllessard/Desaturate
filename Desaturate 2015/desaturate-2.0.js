@@ -2,9 +2,7 @@
 Add a class to css of 'active'. This class will change your navigation elements when the user scrolls.
 Whichever section is on the page will receive the styles placed in '.active'.
 
-The code only recognizes elements in the <nav> of your html.
-It uses the href tags to obtain the positions of your related section/article IDs.
-I.e. your IDs and hrefs need to match and need to be valid IDs.
+The code uses elements in the <nav> of your html to obtain the positions of your related section/article IDs.
 
 When the user scrolls down the 'active' class will change when the next section is 3/4 up the page.
 When the user scrolls up the 'active' class will change when the divider bar of the current section hits the bottom of the browser. I.e. when the section is no longer in the browser, the divider itself has nothing to do with it.
@@ -39,9 +37,7 @@ $(document).ready(function (){
         visible = $('#catnap').css('height');});
     }
   });
-  
-
-  
+    
 //Smooth scroll on nav click
   $('a[href*="#"]:not([href="#"])').click(function(){
     if (location.pathname.replace(/^\//,'') == this.pathname.replace(/^\//,'') && location.hostname == this.hostname) {
