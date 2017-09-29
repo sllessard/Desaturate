@@ -1,5 +1,5 @@
 # Desaturate
-As of 2017 Desaturate is built using Twig templating via Craft CMS, CSS3 and JavaScript/Jquery. Previous builds made use of Liquid templating via Siteleaf CMS.
+As of 2017 Desaturate is built using Twig templating via Craft CMS, CSS3 and JavaScript/jQuery. Previous builds made use of Liquid templating via Siteleaf CMS.
 
 All sites are built with responsive design best practices. 
 
