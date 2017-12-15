@@ -75,7 +75,7 @@ let pageInit = (function () {
   }
 
   document.addEventListener('touchstart', function removeHover(){
-  	document.documentElement.removeClass("noTouch");
+  	$('html').removeClass("noTouch");
   	document.removeEventListener('touchstart', removeHover, false);
   });
 
