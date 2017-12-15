@@ -1,518 +1,432 @@
-$(document).ready(function(){
-	var siteTitle = document.title;
-	var imageLightboxActive = false;
-	var textLightboxActive = false;
-	var slide = $(".entryContent");
-	var destinationUrl;
-	var fadeSpeed = 300;
-	var index = 0;
-	var imageBox = false;
-	var sliderImages = {};
-	var sliderTracks ={};
-	var blanketEntry = false;
-	var scrollPosition = 0;
-	var slidIn = false;
-	var shortUrl;
-	var pseudoModalUrl;
-	var ias;
-	var $container;
-	var pageTitle;
-	var infScroll = false;
-	
-	//Add hover effects to non-mobile
-		function hoverAdder(){
-			if (($( window ).width()/16) > 32.5) {
-				$(".grid-item .hoverContainer, .nav_button_left, .nav_button_right, .externalLinks p").addClass("hoverClass");
-			}
-		}
+import {lazyLoad} from './src/lazyLoad-1.0';
 
-	//Identify active page on load
-		function loadedPage() {
-			$("#ajaxLinks .active").removeClass("active");
-		    $('.navLink a').each(function(){ //Uses loaded page section name to check against nav options. Adds class to highlight active page in nav.
-		        if ($(this).text() == $("#sectionName").text()) {
-		            $(this).addClass('active');
-		            return false;
-		        }
-		    });
-		    $('.mediaNavLink a').each(function(){
-		        if ($(this).text() == $("#sectionName").text()) {
-		            $(this).addClass('active');
-		            return false;
-		        }
-		    });
-		 //Change page tab title
-		 if ($(".fullHeader h1").length > 0){
-		 	pageTitle = $(".fullHeader h1").text();
-		}
-		if(pageTitle != undefined){
+let modalOpen = false;
+
+//Handles title, active nav indicator and infinite scroll
+let pageInit = (function () {
+	const siteTitle = document.title;
+	let currentPag = '';
+	let nextPag = '';
+
+	function titleCreate() { //Head Title creator
+		let pageTitle = $(".fullHeader h1").text();
+
+		if(pageTitle !== ""){
 			document.title = siteTitle + " \xBB " + pageTitle; //Site title + Entry title if defined
 		} else {
-		 document.title = siteTitle; //Else only site title
+		 document.title = siteTitle; //Only site title
+
 		}
-		 hoverAdder(); //Runs hoverAdder on newly loaded page
-		}
+		
+	}
 
-	//Index display for modal images
-		function indexPosition(index, length) {
-			var position = index + 1;
-			if ( length > 0) {
-				$("#currentImageIndex").html(position);
-				$("#totalImages").html(length);
-			}
-		}
+	function loadedPage() {
+		$(".ajaxLinks .active").removeClass("active");
+    $('.navLink a').each(function(){ //Adds class to highlight active page in nav.
+    	if ($(this).text() == $("#sectionName").text()) {
+    		$(this).addClass('active');
+    		return false;
+    	}
+  	});
+	}
 
-	//Set Image to display in lightbox
-		function lightboxImageDisplay (imageIndex, imagesObject) {
-			var	windowHeight = $("#lightbox").height();
-			$("#lightbox img").attr("src", imagesObject[imageIndex]);
-			if($("#imageWrapper").innerHeight() > windowHeight) { //If image is larger than window do not center, center only when smaller than widnow
-				$("#imageWrapper").removeClass("vertCenter");
-				$("#imageWrapper").fadeTo(fadeSpeed, 1);
-			} else {
-				$("#imageWrapper").addClass("vertCenter");
-				$("#imageWrapper").fadeTo(fadeSpeed, 1);
-			}
-		}
+  function initiate() {
+  	let el = $(".unicorn");
 
-	//Close lightbox
-		function closeLightbox() {
-			imageLightboxActive = false; //Reset lightbox variables
-			textLightboxActive = false;
-			imageBox = false;
-			index = 0;
-			sliderImages= {};
+  	if ($('#infPag').length > 0) {
+  		if ((el.position().top + el.outerHeight(true)) <= (($(window).scrollTop() + $(window).height()) + 100)) {
+  			scrollAjax();
+  		} else {
+  			$(document).scroll(function(){	
+  				$(document).off('scroll');
+  				if ((el.position().top + el.outerHeight(true)) <= (($(window).scrollTop() + $(window).height()) + 400)) {
+  					scrollAjax();
+  				} else { setTimeout(function(){
+  					initiate();
+  				}, 250); }
+  			});
+  		}
+  	}
+  }
 
-			$("body").css("overflow-y","auto");
+  function scrollAjax() {
+  	$.ajax({
+  		type: 'GET',
+  		url: $('#infPag a').attr('href'),
+  		success: function(data){
+  			let newItems = $(data).find('.uniemb');
+  			nextPag = $(data).find('.infPag').attr('href');
+  			$('.unikin').append(newItems);
+  			if (currentPag !== nextPag) {
+  				$('#infPag a').attr('href', $(data).find('.infPag').attr('href'));
 
-		 	$("#lightbox, #imageWrapper").fadeOut(fadeSpeed, function(){
-		 		$("#imageWrapper").removeClass("vertCenter");
-		 	});
+  				if (nextPag === undefined) {
 
-		 	$(".pagButtons, .sequencePosition").css("display", "none");
+  					return;
+  				} else {	
+  					currentPag = nextPag;
+  					setTimeout(function(){
+  						initiate();
+  					}, 250);
+  				}
+  			}
+  		}
+  	});
+  }
 
-			$("#lightboxAjax").empty().css("display", "none");
-		}
+  document.addEventListener('touchstart', function removeHover(){
+  	document.documentElement.removeClass("noTouch");
+  	document.removeEventListener('touchstart', removeHover, false);
+  });
 
-	//Ajax call for update
-		function runAjax(Url) {
-			$.ajax({
-				type: 'GET',
-				url: Url,
-				success: function(data){
+  return {
+  	ajaxLoad: () => {
+  		lazyLoad();
+  		loadedPage();
+  		initiate();
+  		titleCreate();
+  	}
+  };
+})();
 
-					if (infScroll === true) { //Destory ias before new load
-							$container.infiniteScroll("destroy");
-							infScroll = false;
-					}
+//Image and text modals with key and touch handlers
+let modal = (function()	{
 
-					$('#ajaxContent').append().html(data);
+	let displayedIndex = 0;
+	let modalArray =[];
+	let modalType = "none";
+	let xDown = null;
+	let fadeSpeed = 300;                                         
+	let yDown = null; 
 
-					$("main").css("visibility", "visible"); //Display main
 
-					$(".contentWrap").imagesLoaded(function(){ //Lazy load images
-						$(window).lazyLoadXT();
-					});
+	function modalArrayBuilder($that, itemsContainer, item, dataRef, lazyRef) { //Create array of other modal items in restricted section for pagination
+		modalArray = $that.closest(itemsContainer).find(item).map(function(index){
 
-					if (blanketEntry === true && ($("#displayFull").length <= 0)){ //If previous page was pseudo and new page is not
- 						blanketEntry = false;
- 						$(".sidebarWrapper").css("opacity", 1);
- 					}
-
-					if ($("#ajaxContent div").hasClass("gridWrapper")){
-						if ($(".sectionContent a").hasClass("infPag")){ //Initiate ias if grid uses infinite pag
-							infiniteGrid();
-						}
-					} else if ($("#ajaxContent div").hasClass("feeder")) { //Initiate ias if feed uses infinite pag
-						if ($(".feeder a").hasClass("infPag")){
-							infiniteFeed();
-						}
-					}  else if ($("#displayFull").length > 0) { //Check for pseudo-modal, ex. Writing section
-						blanketEntry = true;
-						$(".sidebarWrapper").css("opacity", 0);
-					}
-					$('main').fadeTo(fadeSpeed, 1);
-					$(window).scrollTop(0);
-					loadedPage();
-				},
-				error: function() {
-					window.location.replace("http://desaturate.net/404.html");
-				}
-			});
-		}
-
-	//Feed using infinite ajax scroll
-		function infiniteFeed(){
-			infScroll = true;
-			$container = $(".feeder");
-			$container.infiniteScroll({
-			  append: ".sectionContent",
-			  path: ".infPag",
-			  prefill: true,
-			  hideNav: "#infPag",
-			  history: 'disable', //Prevent ias from updating history
-			  scrollThreshold: 400
-			});
-		}
-	//Grid using infinite ajax scroll
-		function infiniteGrid(){
-			infScroll = true;
-			$container = $(".gridWrapper");
-			$('.gridWrapper').imagesLoaded( function(){
-				$container.infiniteScroll({
-				  append: ".grid-item",
-				  path: ".infPag",
-				  prefill: true,
-				  hideNav: "#infPag",
-				  history: 'disable',
-				  scrollThreshold: 400
-				});
-
-				$container.on('append.infiniteScroll', function() {
-				    hoverAdder();
-				});
-			});
-		}
-
-//Initial page load
-	loadedPage();
-	$(window).lazyLoadXT();
-
-	//Add hover events to non-mobile
-		if (($( window ).width()/16) > 32.5) {
-			$("#ajaxLinks a").addClass("hoverNav");
-		}
-
-	//Check for pseudo-modal
-		 if ($("#displayFull").length > 0) {
-		 	blanketEntry = true;
-		 }
-
-	//Initialization of ias
-		if ($(".sectionContent a").hasClass("infPag")){
-			infiniteGrid();
-		} else if ($(".feeder a").hasClass("infPag")) {
-			infiniteFeed();
-		}
-	
-// Navigation and grid listeners
-
-	//Handle back/forward buttons
-	  	window.onpopstate = function() {
-	  		if (imageLightboxActive || textLightboxActive === true){ //Closes lightbox if active
-		 		closeLightbox();
-	  		}
-
-		    var path = location.pathname;
-		    runAjax(path);
-		    loadedPage();
-	  	};
-	//Nav and breadcrumb listener
-		$(document).on('click', ".navLink a, .mediaNavLink a, .pageHeader a, .lightboxPath a:not(#pathEntryTitle), #pathSection, .entryHeader a", function(e) {
-			e.preventDefault();
-			destinationUrl = this.href;
-			 if (imageLightboxActive || textLightboxActive === true){ //Closes lightbox if active
-		 		closeLightbox();
-	  		}
-
-	  		if (slidIn === true && (($( window ).width()/16) < 32.5 )) { //Mobile nav handler/animation
-	  			$("body").css("overflow","auto");
-				$(".sidebarMediaBackground").animate({"opacity" : "0"}, function(){
-					$(".sidebarMediaBackground").animate({"left": "-100%"}, 225);
-						$("#pageCover div").animate({"height": "4.5625rem"}, 375, function(){
-						$("#pageCover").animate({"opacity" : "0"}, 750, function(){
-							$("#pageCover").css("left", "-100%");
-									history.pushState('', '', destinationUrl);
-									runAjax(destinationUrl);
-						});
-					});
-				});
-				slidIn = false;
-	  		} else {
-				history.pushState('', '', destinationUrl);
-				runAjax(destinationUrl);
-			}
-		});
-
-	//Grid cell listener
-		$(document).on('click', ".grid-item:not('.externalPage')", function(e) {
-			e.preventDefault();
-			destinationUrl = this.href;
-			history.pushState('', '', destinationUrl);
-			runAjax(destinationUrl);
-		});
-
-	//Pesuedo-modal close
-		$(document).on("click", ".mediaTitle, .mediaTitle em, #displayFull, #displayFull .contentWrap", function(e){
-			if (e.target == this) {
-			pseudoModalUrl = window.location.href;
-			shortUrl=pseudoModalUrl.substring(0,pseudoModalUrl.lastIndexOf("/")); //On off click gets the section url and returns to imitate closing of image modals
-			history.replaceState('', '', shortUrl);
-			runAjax(shortUrl);}
-		});
-
-//Lightboxes
-
-	//Lyrics Lightbox
-		$(document).on('click', ".trackListing a", function(e) {
-			var pathSection = $(".navLink .active"); //Used to set section breadcrumb and href below
-			e.preventDefault();
-			destinationUrl = this.href;
-			textLightboxActive = true;
-			scrollPosition = $(document).scrollTop();
-			sliderTracks = $(this).closest(".trackListing").find("a").map(function(){
-	 			return $(this).attr("href"); //creates array of images in entry for lightbox
-	 		});
-	 		
-	 		for (var i = 0, len = sliderTracks.length; i < len; i++) { //Finds tracks index position for display in modal
-		    	matchFound = sliderTracks[i].substring(sliderTracks[i].lastIndexOf('/') + 1) == destinationUrl.substring(destinationUrl.lastIndexOf('/') + 1);
-		    	if(matchFound){
-			    	index = i;
-			        break;
-		    	}
-			}
-	 			
-		//Display index of in modal
-			$(".sequencePosition").css("display", "block");
-		 	indexPosition(index, sliderTracks.length);
-
-			$("#pathSection").html(pathSection.text()).attr("href", pathSection.attr("href")); //Breadcrumb handlder
-	 		$("#pathEntryTitle").text($("#entryName").text());
-	 		if ($("#entryName").attr("class") === "italicTitle") {
-	 			$("#pathEntryTitle").addClass("entryItalicTitle");
-	 	}
-
-			$.ajax({
-				type: 'GET',
-				url: destinationUrl,
-				success: function(data){
-					$('#lightboxAjax').addClass("flexClass").append().html(data);
-					$("body").css("overflow-y", "hidden");
-					$("#lightbox").css("display", "block");
-					hoverAdder();
-				}
-			});
-		});
-
-	//Lyrics Lightbox Pagination
-		$(document).on('click', "#lightboxAjax .nav_button", function(e){
-			e.preventDefault();
-			nextTrack = this.href;
-			 			if ($(this).hasClass("moveRight")) {
-	 				index -= 1;
-	 				if (index < 0) {index = sliderImages.length -1; }
-	 			} else {
-					index += 1;
-					if (index > (sliderImages.length - 1)) {index = 0;} 
+			if($(this).attr(lazyRef) !== undefined) {
+	 			if ($that.attr(lazyRef) == $(this).attr(lazyRef)) { //Get index of element clicked
+	 				displayedIndex = index;
 	 			}
-			$('#lightboxAjax').animate({opacity: 0}, fadeSpeed, function(){
-				console.log("fadeout");
-				$.ajax({
-					type: 'GET',
-					url: nextTrack,
-					success: function(data){
-							indexPosition(index, sliderTracks.length);
-							$('#lightboxAjax').append().html(data).animate({opacity: 1}, fadeSpeed);
-					},
-					error: function() {
-						window.location.replace("http://104.131.162.65/404.html");
-					}
-				});
-			});
-		});
-
- 	//Image Lightbox
-		$(document).on('click', ".lightboxSlide", function(e){
-		 	var image_href = this.src;
-		 	scrollPosition = $(document).scrollTop();
-		 	sliderImages = $(this).closest(".entryContent").find(".lightboxSlide").map(function(){
-		 		if($(this).attr("data-src") != undefined) {
-		 			return $(this).attr("data-src"); //creates array of images in entry for lightbox
-		 		} else {
-		 			return $(this).attr("src");
-
+	 			return $(this).attr(lazyRef); //Used for when images and lazy loaded and src has not been applied
+	 		} else { 
+		 		if ($that.attr(dataRef) == $(this).attr(dataRef)) { //Get index of element clicked
+		 			displayedIndex = index;
 		 		}
-		 		});
-		 	var	matchFound = false;
-		 	var pathSection = $(".navLink .active"); //Used to set section breadcrumb and href below
-		 	imageLightboxActive = true;
-		 	e.preventDefault();
-		 	$("#pathSection").html(pathSection.text()).attr("href", pathSection.attr("href"));
-		 	if ($("#entryName").attr("class") === "italicTitle") {
-		 		$("#pathEntryTitle").addClass("italicTitle");
+		 		return $(this).attr(dataRef);
 		 	}
-		 	$("#pathEntryTitle").text($("#entryName").text());
-
-		//Check which image initiated modal to set displayed index
-			for (var i = 0, len = sliderImages.length; i < len; i++) {
-			    matchFound = sliderImages[i].substring(sliderImages[i].lastIndexOf('/') + 1) == image_href.substring(image_href.lastIndexOf('/') + 1);
-			    if(matchFound){
-			    	index = i;
-			        break;
-			    }
-			}
-
- 			$(".sequencePosition").css("display", "block");
-    	 	indexPosition(index, sliderImages.length);
-
-			if ( sliderImages.length > 1) { //Only show pag if more than one image
-				$(".pagButtons, .imageLeft, .imageRight").css("display", "block");
-				imageBox = true;
-			}
-
-		//Display lightbox
-			$("#lightbox").css("display", "block").fadeIn(fadeSpeed, function(){
-				$("body").css("overflow-y","hidden");
-				lightboxImageDisplay(index, sliderImages);		
-			});
 		});
 
-	//Close lightbox with off click
-		$("#lightbox, #pathEntryTitle, #lightboxAjax").off().on("click", function(e){
-			if (e.target === this) {
-		 		closeLightbox();
-		 		window.scroll(0, scrollPosition);
-	 		}
- 		});
+		indexPosition();
+		return modalArray;
+	}
 
-	//Key handlers for lightbox
- 		$(document).keyup(function(e) {
- 			var keyPressed = e.which;
- 			if (imageLightboxActive === true) {
-	 			
-	        	if (keyPressed == 27) { // esc keycode
-				 		closeLightbox();
-				 		window.scroll(0, scrollPosition);
-	        	} else if (keyPressed == 39) { //Right arrow
-	        		$(".imageRight").click();
-	        	} else if (keyPressed == 37) { //Left arrow
-	        		$(".imageLeft").click();
-	        	}
-	        } else if (textLightboxActive === true) {
-	        	if (keyPressed == 27) {
-				 	closeLightbox();
-				 	window.scroll(0, scrollPosition);
-	        	} else if (keyPressed == 39) {
-	        		$(".moveLeft").click();
-	        	} else if (keyPressed == 37) { 
-	        		$(".moveRight").click();
-	        	}
-	        } else if (blanketEntry === true) {
-	        	if (keyPressed == 27) {
-	        		pseudoModalUrl = window.location.href;
-	        		shortUrl=pseudoModalUrl.substring(0,pseudoModalUrl.lastIndexOf("/"));
-	        		runAjax(shortUrl);
-	        	} else if (keyPressed == 39) {
-	        		$(".nav_button_right").click();
-	        	} else if (keyPressed == 37) {
-	        		$(".nav_button_left").click();
-	        	}
-	        }
-   		});
-//Lightbox pag
+	function indexPosition() {
+		let length = modalArray.length;
 
-	//Image Pagination
-		$(".boxPag").on("click", function(){
- 			if ($(this).hasClass("leftImagePag")) {
- 				index -= 1;
- 				if (index < 0) {index = sliderImages.length -1;}
- 			} else {
-				index += 1;
-				if (index > (sliderImages.length - 1)) {index = 0;} 
- 			}
-    	 	indexPosition(index, sliderImages.length);
-    		$("#imageWrapper").fadeTo(fadeSpeed, 0, function(){
-				lightboxImageDisplay(index, sliderImages);
-    		});
- 		});
+		$("#currentImageIndex").html(displayedIndex + 1);
+		$("#totalImages").html(length);
+	}
 
- 	//Image lightbox pag
-		$(document).on('click', "#ajaxContent .nav_button_left, #ajaxContent .nav_button_right", function(e) {
-			e.preventDefault();
-			destinationUrl = this.href;
+	function breadcrumbCreator() {
+		let pathSection = $(".navLink .active");
 
-			if (imageLightboxActive === true){ //Closes lightbox if active
-		 		closeLightbox();
-	  		}
-
-			history.pushState('', '', destinationUrl);
-			runAjax(destinationUrl);
-		});
-
-	//Swipe event
-		document.addEventListener('touchstart', handleTouchStart, false);        
-		document.addEventListener('touchmove', handleTouchMove, false);
-
-		var xDown = null;                                                        
-		var yDown = null;                                                        
-
-		function handleTouchStart(evt) {                                         
-		    xDown = evt.touches[0].clientX;                                      
-		    yDown = evt.touches[0].clientY;                                      
-		}                                                
-
-		function handleTouchMove(evt) {
-		    if ( ! xDown || ! yDown ) {
-		        return;
-		    }
-
-		    var xUp = evt.touches[0].clientX;                                    
-		    var yUp = evt.touches[0].clientY;
-
-		    var xDiff = xDown - xUp;
-		    var yDiff = yDown - yUp;
-
-		    if ( Math.abs( xDiff ) > Math.abs( yDiff ) ) {/*most significant*/
-		        if ( xDiff > 0 && imageLightboxActive === true ) {
-		            $(".imageRight").click();
-		        } else if ( xDiff <= 0 && imageLightboxActive === true) {
-		            $(".imageLeft").click();
-		        } else if ( xDiff > 0 && textLightboxActive === true ) {
-		            $(".moveLeft").click();
-		        } else if ( xDiff <= 0 && textLightboxActive === true) {
-		            $(".moveRight").click();
-		        }                     
-		    } 
-		    /* reset values */
-		    xDown = null;
-		    yDown = null;                                             
+		$(".pathSection").html(pathSection.text()).attr("href", pathSection.attr("href")); 
+		$("#pathEntryTitle").text($("#entryName").text());
+		if ($("#entryName").attr("class") === "italicTitle") {
+			$("#pathEntryTitle").addClass("entryItalicTitle");
 		}
+	}
 
-//@Media Nav Slider 
-	$(document).on("click", ".navButton", function(){
-		if (slidIn === false) {
-			$(".navButton").unbind(); //Prevent button from being clicked again until animation complete
-			scrollPosition = $(document).scrollTop();
-			$("#pageCover").css("left", "0%");
-				$("#pageCover").animate({"opacity" : "1"}, 550, function(){
-					$("main").css("visibility", "hidden");
-					$("#pageCover div").animate({"height": "6rem"}, 350, function(){
-						$(".sidebarMediaBackground").animate({"left": "0%"}, 0, function(){
-							$(".sidebarMediaBackground").animate({"opacity" : "1"}, function(){
-								$(".navButton").bind();
-							});
-							$("body").css("overflow","hidden");
-						});		
-					});
-				});
-			slidIn = true;
+	function modalImageDisplay() {
+		let	windowHeight = $("#lightbox").height();
+		$("#lightbox img").attr("src", modalArray[displayedIndex]);
+		if($("#imageWrapper").innerHeight() > windowHeight) { //If image is larger than window do not center
+			$("#imageWrapper").removeClass("vertCenter").fadeTo(fadeSpeed, 1);
 		} else {
-			$(".navButton").unbind();
-			$("body").css("overflow","auto");
-			$("main").css("visibility", "visible");
-			window.scroll(0, scrollPosition);
-			$(".sidebarMediaBackground").animate({"opacity" : "0"}, function(){
-				$(".sidebarMediaBackground").animate({"left": "-100%"}, 0);
-				$("#pageCover div").animate({"height": "4.5625rem"}, 355, function(){
-					$("#pageCover").animate({"opacity" : "0"}, 550, function(){
-						$("#pageCover").css("left", "-100%", function(){
-							$(".navButton").bind();
-						});
-					});
-				});
-			});
-			slidIn = false;
+			$("#imageWrapper").addClass("vertCenter").fadeTo(fadeSpeed, 1);
 		}
+	}
+
+	function modalTextDisplay() {
+		$.ajax({
+			type: 'GET',
+			url: modalArray[displayedIndex],
+			success: function(data){
+				$('#textWrapper').empty().append(data).fadeTo(fadeSpeed, 1);
+			}
+		});
+	}
+
+	function toggleModal(contentDisplay) {
+
+		pagDisplay();
+
+		if ($("#lightbox").css("display") === "none") {
+			modalOpen = true;
+			breadcrumbCreator();
+			
+			modalArray.length > 1 ? $(".pagButtons").css("display", "block") : $(".pagButtons").css("display", "none");
+
+			$("#lightbox").css("display", "block").fadeIn(fadeSpeed, function(){
+				$("body").css("overflow-y","hidden");	
+				switch (modalType) {
+
+					case 'image':
+					modalImageDisplay();
+					break;
+
+					case 'text':
+					$("#textWrapper").addClass('flexClass', modalTextDisplay());
+					break;
+				}
+
+			});
+		} else {
+			modalOpen = false;
+			$("#lightbox").fadeOut(fadeSpeed, function(){
+				$("#textWrapper").empty().removeClass('flexClass').css("opacity", "0");
+				$("#imageWrapper img").attr('src', '#');
+				$("#imageWrapper").css("opacity", "0")
+				$("body").css("overflow-y","auto");
+				document.removeEventListener('touchstart', handleTouchStart, false);        
+				document.removeEventListener('touchmove', handleTouchMove, false);
+			});
+		}
+	}
+
+	function pagDisplay() {
+		if (modalArray.length > 1){
+			$(".pagButtons").toggle();
+			document.addEventListener('touchstart', handleTouchStart, false);        
+			document.addEventListener('touchmove', handleTouchMove, false);
+			if (modalType === "image") {
+				$(".imageLeft, .imageRight").toggle();
+			}
+		}
+	}
+
+	function modalPag($that) {
+		if ($that.hasClass("leftImagePag")) {
+			displayedIndex -= 1;
+			if (displayedIndex < 0) {displayedIndex = modalArray.length -1; }
+		} else {
+			displayedIndex += 1;
+			if (displayedIndex > (modalArray.length - 1)) {displayedIndex = 0;} 
+		}
+		indexPosition();
+
+		switch (modalType) {
+			case 'image':
+				$("#imageWrapper").fadeTo(fadeSpeed, 0, function(){
+					modalImageDisplay();
+				});
+				break;
+
+			case 'text':
+				$("#textWrapper").fadeTo(fadeSpeed, 0, function(){
+					modalTextDisplay();
+				});
+				break;
+		}
+	}
+
+	function keyEvents(keyPressed) {
+		if (modalOpen === true) {
+			switch (modalType) {
+
+				case 'image': 
+	      	if (keyPressed == 27) { // esc keycode
+	      		toggleModal();
+				 		//window.scroll(0, scrollPosition);
+	      	} else if (keyPressed == 39) { //Right arrow
+	      		$(".imageRight").click();
+	      	} else if (keyPressed == 37) { //Left arrow
+	      		$(".imageLeft").click();
+	      	} break;
+
+	      case 'text':
+	      	if (keyPressed == 27) {
+	      		toggleModal();
+					 	//window.scroll(0, scrollPosition);
+					 } else if (keyPressed == 39) {
+					 	$(".imageRight").click();
+					 } else if (keyPressed == 37) { 
+					 	$(".imageLeft").click();
+					 }
+			}
+		}
+	}
+
+	function handleTouchStart(evt) {                                         
+		xDown = evt.touches[0].clientX;                                      
+		yDown = evt.touches[0].clientY;                                      
+	}
+
+	function handleTouchMove(evt) {
+		if ( ! xDown || ! yDown ) {
+			return;
+		}
+
+		let xUp = evt.touches[0].clientX;                                    
+		let yUp = evt.touches[0].clientY;
+
+		let xDiff = xDown - xUp;
+		let yDiff = yDown - yUp;
+
+		if ( Math.abs( xDiff ) > Math.abs( yDiff ) ) {/*most significant*/
+			if ( xDiff > 0) {
+				$(".imageRight").click();
+			} else if ( xDiff <= 0) {
+				$(".imageLeft").click();
+			}                  
+		} 
+		/* reset values */
+		xDown = null;
+		yDown = null;                                             
+	}
+
+	return {
+		arrayBuilder: modalArrayBuilder,
+		visibleImageModal: () => {
+			modalType = 'image';
+			toggleModal();
+		},
+		visibleLyricsModal: () => {
+			modalType = 'text';
+			toggleModal();
+		},
+		toggleModal: toggleModal,
+		pagination: modalPag,
+		keyEvents: keyEvents
+	};
+})();
+
+//Ajax and resize navigation
+let pageChange = (function() {
+	let mediaNavVisible = false;
+
+	function ajaxLoad(Url) {
+		$.ajax({
+			type: 'GET',
+			url: Url,
+			success: function(data){
+
+				if (mediaNavVisible === true && (($( window ).width()/16) <= 32.5)) {
+					mediaNav();
+				}
+
+				$('#ajaxContent').append().html(data);
+				$(window).scrollTop(0);
+				pageInit.ajaxLoad();
+			},
+			error: function() {
+				window.location.replace("http://desaturate.net/404.html");
+			}
+		});
+	}
+
+	function mediaNav() {
+		if (mediaNavVisible === false) {
+			mediaNavVisible = true;
+			$(".sidebarWrapper").css("left", "0");
+			$(".pageHeader").animate({"height": "6rem"});
+			$(".pageHeader p, .pageTitle, nav").animate({"opacity": "1"}, ()=>{
+				if (($( window ).width()/16) <= 32.5) {
+					$("body").css("overflow","hidden");
+				} else {
+					$("body").css("overflow","auto");
+				}
+			});
+			$(window).off('resize');
+		} else {
+			mediaNavVisible = false;
+			$("body").css("overflow","auto");
+			$(".pageHeader").animate({"height": "4.5625rem"});
+			$(".pageHeader p, .pageTitle, nav").animate({"opacity": "0"}, ()=>{
+				$(".sidebarWrapper").css("left", "-100%");
+			});
+			$(window).on('resize', function() {
+				if (($( window ).width()/16) > 32.5) {
+					mediaNav();
+				} 
+			});
+		}
+	}
+
+	return {
+		runAjax: ajaxLoad,
+		mediaNav: mediaNav
+	};
+
+})();
+
+pageInit.ajaxLoad();
+
+//Open Modal
+$(document).on('click', ".lightboxSlide, .trackSlide", function(e){
+	let $that = $(this);
+
+	e.preventDefault();
+
+	if ($(this).hasClass('lightboxSlide')) {
+		modal.arrayBuilder($that, ".entryContent", ".lightboxSlide", "src", "data-src");
+		modal.visibleImageModal();
+	} else if ($(this).hasClass('trackSlide')){
+		modal.arrayBuilder($that, ".trackListing", ".trackSlide", "href", "data-href");
+		modal.visibleLyricsModal();
+	}
+});
+
+//Close modal
+$("#lightbox, #pathEntryTitle").on("click", function(e){
+	if (e.target === this) {
+		modal.toggleModal();
+	}
+});
+
+//Modal Pagination
+$(".boxPag").on("click", function(){
+	let $that = $(this);
+	modal.pagination($that);
+});
+
+//Modal Key events
+$(document).keyup(function(e) {
+	var keyPressed = e.which;
+	modal.keyEvents(keyPressed);
+});
+
+//Ajax navigation
+$(document).on('click', ".nav_button_left, .nav_button_right, .navLink a, .mediaNavLink a, .pageHeader a, .lightboxPath a:not(#pathEntryTitle), #pathSection, .entryHeader a, .grid-item:not('.externalPage')", function(e) {
+	e.preventDefault();
+	let destinationUrl = this.href;
+
+	if (modalOpen === true) {
+		modal.visibleImageModal();
+	}
+	history.pushState('', '', destinationUrl);
+	pageChange.runAjax(destinationUrl);
+});
+
+
+window.onpopstate = function() {
+	let path = location.pathname;
+	if (modalOpen === true) {
+		modal.visibleImageModal();
+	}
+	pageChange.runAjax(path);
+};
+
+
+$(document).on("click", ".mediaTitle, .mediaTitle em, #displayFull, #displayFull .contentWrap", function(e){
+	if (e.target == this) {
+		pseudoModalUrl = window.location.href;
+		let sectionUrl = pseudoModalUrl.substring(0,pseudoModalUrl.lastIndexOf("/")); //Off click gets the section url and returns to imitate closing of image modals
+		history.replaceState('', '', sectionUrl);
+		pageChange.runAjax(sectionUrl);
+	}
 	});
 
+$(document).on("click", ".navButton", function(){
+	pageChange.mediaNav();
 });
