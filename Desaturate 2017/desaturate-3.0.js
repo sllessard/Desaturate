@@ -1,4 +1,5 @@
 import {lazyLoad} from './src/lazyLoad-1.0';
+import infScrollInit from './src/infinite-scroll/is-1.0';
 
 let modalOpen = false;
 
@@ -30,50 +31,6 @@ let pageInit = (function () {
   	});
 	}
 
-  function initiate() {
-  	let el = $(".unicorn");
-
-  	if ($('#infPag').length > 0) {
-  		if ((el.position().top + el.outerHeight(true)) <= (($(window).scrollTop() + $(window).height()) + 100)) {
-  			scrollAjax();
-  		} else {
-  			$(document).scroll(function(){	
-  				$(document).off('scroll');
-  				if ((el.position().top + el.outerHeight(true)) <= (($(window).scrollTop() + $(window).height()) + 400)) {
-  					scrollAjax();
-  				} else { setTimeout(function(){
-  					initiate();
-  				}, 250); }
-  			});
-  		}
-  	}
-  }
-
-  function scrollAjax() {
-  	$.ajax({
-  		type: 'GET',
-  		url: $('#infPag a').attr('href'),
-  		success: function(data){
-  			let newItems = $(data).find('.uniemb');
-  			nextPag = $(data).find('.infPag').attr('href');
-  			$('.unikin').append(newItems);
-  			if (currentPag !== nextPag) {
-  				$('#infPag a').attr('href', $(data).find('.infPag').attr('href'));
-
-  				if (nextPag === undefined) {
-
-  					return;
-  				} else {	
-  					currentPag = nextPag;
-  					setTimeout(function(){
-  						initiate();
-  					}, 250);
-  				}
-  			}
-  		}
-  	});
-  }
-
   document.addEventListener('touchstart', function removeHover(){
   	$('html').removeClass("noTouch");
   	document.removeEventListener('touchstart', removeHover, false);
@@ -83,7 +40,7 @@ let pageInit = (function () {
   	ajaxLoad: () => {
   		lazyLoad();
   		loadedPage();
-  		initiate();
+  		infScrollInit();
   		titleCreate();
   	}
   };
@@ -306,6 +263,7 @@ let pageChange = (function() {
 	let mediaNavVisible = false;
 
 	function ajaxLoad(Url) {
+		
 		$.ajax({
 			type: 'GET',
 			url: Url,
@@ -345,7 +303,7 @@ let pageChange = (function() {
 			$(".pageHeader p, .pageTitle, nav").animate({"opacity": "0"}, ()=>{
 				$(".sidebarWrapper").css("left", "-100%");
 			});
-			$(window).on('resize', function() {
+			$(window).resize(function() {
 				if (($( window ).width()/16) > 32.5) {
 					mediaNav();
 				} 
