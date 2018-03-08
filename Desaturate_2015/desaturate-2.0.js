@@ -8,7 +8,6 @@ When the user scrolls down the 'active' class will change when the next section 
 When the user scrolls up the 'active' class will change when the divider bar of the current section hits the bottom of the browser. I.e. when the section is no longer in the browser, the divider itself has nothing to do with it.
 */
 
-
 $(document).ready(function (){
   var visible = $('#catnap').css('height');
 //nav tags array generated on ready, used to identify nav element to be active and article position on page

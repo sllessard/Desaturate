@@ -1,102 +1,105 @@
-{# Outside of entry template sectionMain.twig controls content within <main> on the site. Directs Craft to the correct section types based on user selection in CMS via dropdown. User has options for a single page, feed, and grids with or without lighboxed entries. The sites navigation is built on Craft's structure section type to allow the author full control over their navigation display. #}
+{# 
+  twigExample.twig controls content within <main> on the site. 
+  Directs Craft to the correct section types based on user selection in CMS via dropdown. 
+  User has options for a single page, feed, and grids with or without lighboxed entries. 
+  Site navigation is built on Craft's structure section type to allow the author full control over navigation display. 
+#}
 
-{% extends (craft.request.isAjax and not craft.request.isLivePreview) ? "_layouts/ajax-layout" : "_layouts/site" %} {#Test for ajax request and only includes site layout if page is not loaded via ajax#}
+{# Tests for ajax request and only includes site layout if page is not loaded via ajax #}
+{% extends (craft.request.isAjax and not craft.request.isLivePreview) ? "_layouts/ajax-layout" : "_layouts/site" %}
 
 {% block content %}
-	{% set thisSection =  entry.slug %}
-	{% set posts = craft.entries.section( thisSection ) %}
-	{% set gridcells = craft.entries.section( thisSection ).level(1) %}
-	{% set fullImage = entry.wall.first() %}
-	{% set infinite = entry.initialPosts %}
+  {% set thisSection =  entry.slug %}
+  {% set posts = craft.entries.section( thisSection ) %}
+  {% set gridcells = craft.entries.section( thisSection ).level(1) %}
+  {% set fullImage = entry.wall.first() %}
+  {% set infinite = entry.initialPosts %}
 
-	<div style="display: none;" id="sectionName">{{entry.title}}</div>
-	
-	{% if fullImage is not empty %} {# Full image covers all content, if image exist then other content should not be loaded#}
-		{% cache for 1 week %}
-			<img class ="wall" src="{{ fullImage.url }}">
-		{% endcache %}
-	{% else %}
+  <div style="display: none;" id="sectionName">
+    {{entry.title}}
+  </div>
 
-		{% include "_layouts/section_header" %}
+  {# Full image covers all content, if image exist then other content should not be loaded#}
+  {% if fullImage is not empty %}
+    {% cache for 1 week %}
+      <img class ="wall" src="{{ fullImage.url }}">
+    {% endcache %}
+  {% else %}
+    {% include "_layouts/section_header" %}
+    {% if entry.templateType == "single"%} {#Single#}
+      <div class="noGrid">
+        {% include "_layouts/single" %}
+      </div>
+    {% elseif entry.templateType == "feed" %} {#Feed#}
+      <div class="feeder noGrid">
+        {% include "_layouts/feed" %}
+      </div>
+    {% else %}
+      {# Design allows for author to use one full background image or repeated angled images. #}
+      {% set repeatedBackground = globalStyle.repeatedBackgroundImage.first() %}
+      {% set fullBackground = globalStyle.fullBackgroundImage.first() %}
+      <section class="sectionContent">
+        {#Background image div#}
+        {% cache globally for 2 weeks %}
+          <div style="background: 
+            {% if repeatedBackground|length %}  
+              url({{ repeatedBackground.url }}) 0 0 repeat;)" class="backgroundImageLayer"> 
+            {% elseif fullBackground|length %} 
+              url({{ fullBackground.url }}) no-repeat center center fixed;)" class="backgroundImageFullLayer">
+            {% else %}
+              {{ globalStyle.gridBackgroundColor }}" class="backgroundImageFullLayer">
+            {% endif %}
+          </div>
+        {% endcache %}
 
-		{% if entry.templateType == "single"%} {#Single#}
-			<div class="noGrid">
-				{% include "_layouts/single" %}
-			</div>
-
-		{% elseif entry.templateType == "feed" %} {#Feed#}
-			<div class="feeder noGrid">
-				{% include "_layouts/feed" %}
-			</div>
-
-		{% else %} {#Grid-included in full for review purposes#}
-			{#Design allows for author to use one full background image or repeated angled images. Which are obtained with the following...#}
-			{% set repeatedBackground = globalStyle.repeatedBackgroundImage.first() %}
-			{% set fullBackground = globalStyle.fullBackgroundImage.first() %}
-
-			<section class="sectionContent">
-
-				{#Background image div#}
-				{% cache globally for 2 weeks %}
-					<div style="background: 
-						{% if repeatedBackground|length %}  
-							url({{ repeatedBackground.url }}) 0 0 repeat;)" class="backgroundImageLayer"> 
-						{% elseif fullBackground|length %} 
-							url({{ fullBackground.url }}) no-repeat center center fixed;)" class="backgroundImageFullLayer">
-						{% else %}
-							{{ globalStyle.gridBackgroundColor }}" class="backgroundImageFullLayer">
-						{% endif %}
-					</div>
-				{% endcache %}
-
-				<div class="gridWrapper">
-					{% paginate gridcells.limit( (entry.initialPosts) ) as pageInfo, pageEntries %}
-					{% for gridcell in pageEntries %}
-						{% set thumbnail = gridcell.thumbnail.first() %}
-						{% if thumbnail|length %} {#Cell has a thumbnail#}
-							<a class="grid-item imageCell" href="{{gridcell.url}}">
-								<div>
-									<img src="{{ thumbnail.url }}">
-									<h3 
-										{% if gridcell.italicizedTitle|length %} 
-											class="italicTitle" 
-										{% endif %}>{{ gridcell.title }}
-									</h3>
-									<h4>{{ gridcell.subtitle }}</h4>
-								</div>
-							</a>
-						{% elseif gridcell.externalUrl is empty %} {#Cell is internal text only#}
-							<a class="grid-item textCell" href="{{gridcell.url}}">
-								<div>
-									<h3 
-										{% if gridcell.italicizedTitle|length %} 
-											class="italicTitle" 
-										{% endif %}>{{ gridcell.title }}
-									</h3>
-									<h4>{{ gridcell.subtitle }}</h4>
-								</div>
-							</a>
-						{% else %} {#Cell is external text only#}
-								<a class="grid-item textCell externalPage" href="{{ gridcell.externalUrl }}" target="_blank">
-								<div>
-									<h3 
-										{% if gridcell.italicizedTitle|length %}
-											class="italicTitle" 
-										{% endif %}>{{ gridcell.title }}
-									</h3>
-									<h4>{{ gridcell.subtitle }}</h4>
-								</div>
-							</a>
-						{% endif %}
-					{% endfor %}
-				</div>
-				{#Pagination handler for infinite ajax scroll#}
-				{% if pageInfo.nextUrl %}
-					<div id="infPag">
-						<a class="infPag" href="{{ pageInfo.nextUrl }}">Next Page</a>
-					</div>
-				{% endif %}
-			</section>
-		{% endif %}
-	{% endif %}
+        <div class="gridWrapper">
+          {% paginate gridcells.limit( (entry.initialPosts) ) as pageInfo, pageEntries %}
+          {% for gridcell in pageEntries %}
+            {% set thumbnail = gridcell.thumbnail.first() %}
+            {% if thumbnail|length %} {#Cell has a thumbnail#}
+              <a class="grid-item imageCell" href="{{gridcell.url}}">
+                <div>
+                  <img src="{{ thumbnail.url }}">
+                  <h3 
+                    {% if gridcell.italicizedTitle|length %} 
+                      class="italicTitle" 
+                    {% endif %}>{{ gridcell.title }}
+                  </h3>
+                  <h4>{{ gridcell.subtitle }}</h4>
+                </div>
+              </a>
+            {% elseif gridcell.externalUrl is empty %} {#Cell is internal text only#}
+              <a class="grid-item textCell" href="{{gridcell.url}}">
+                <div>
+                  <h3 
+                    {% if gridcell.italicizedTitle|length %} 
+                      class="italicTitle" 
+                    {% endif %}>{{ gridcell.title }}
+                  </h3>
+                  <h4>{{ gridcell.subtitle }}</h4>
+                </div>
+              </a>
+            {% else %} {#Cell is external text only#}
+                <a class="grid-item textCell externalPage" href="{{ gridcell.externalUrl }}" target="_blank">
+                <div>
+                  <h3 
+                    {% if gridcell.italicizedTitle|length %}
+                      class="italicTitle" 
+                    {% endif %}>{{ gridcell.title }}
+                  </h3>
+                  <h4>{{ gridcell.subtitle }}</h4>
+                </div>
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {#Pagination handler for infinite ajax scroll#}
+        {% if pageInfo.nextUrl %}
+          <div id="infPag">
+            <a class="infPag" href="{{ pageInfo.nextUrl }}">Next Page</a>
+          </div>
+        {% endif %}
+      </section>
+    {% endif %}
+  {% endif %}
 {% endblock %}
